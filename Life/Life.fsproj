@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Scratch.fs" />
     <Compile Include="Life.fs" />
   </ItemGroup>
   <ItemGroup>

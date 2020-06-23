@@ -7,21 +7,35 @@ open Fabulous.XamarinForms
 open Fabulous.XamarinForms.LiveUpdate
 open Xamarin.Forms
 
-module App = 
+module App =
+    type PlayMode =
+        | RunMode
+        | ConfigureMode 
+
     type Model = 
-      { Count : int
-        Step : int
-        TimerOn: bool }
-
+      {
+        rows: int
+        columns: int
+        mode: PlayMode
+      }
+    type Cell = int * int
+    
     type Msg = 
-        | Increment 
-        | Decrement 
+        //configure mode
+        | ToggleCell of Cell    
         | Reset
-        | SetStep of int
-        | TimerToggled of bool
-        | TimedTick
+        | RunLife
 
-    let initModel = { Count = 0; Step = 1; TimerOn=false }
+        // play mode
+        | PauseEvolution
+        | CeaseEvolution
+        | StepEvolution 
+        | SetStep
+        | TimedTick
+        
+        // both modes
+        | ChangeMode of PlayMode
+    let initModel = { rows = 10; columns = 10; mode = ConfigureMode}
 
     let init () = initModel, Cmd.none
 
@@ -32,30 +46,38 @@ module App =
 
     let update msg model =
         match msg with
-        | Increment -> { model with Count = model.Count + model.Step }, Cmd.none
-        | Decrement -> { model with Count = model.Count - model.Step }, Cmd.none
-        | Reset -> init ()
-        | SetStep n -> { model with Step = n }, Cmd.none
-        | TimerToggled on -> { model with TimerOn = on }, (if on then timerCmd else Cmd.none)
-        | TimedTick -> 
-            if model.TimerOn then 
-                { model with Count = model.Count + model.Step }, timerCmd
-            else 
-                model, Cmd.none
+        
+        
+        | Reset -> init ()        
+        | ToggleCell cell -> model, Cmd.none
+        | ChangeMode lifeMode -> model, Cmd.none        
+        | PauseEvolution -> model, Cmd.none
+        | StepEvolution -> model, Cmd.none
+        | CeaseEvolution -> model, Cmd.none
+        | SetStep -> model, Cmd.none
+        | TimedTick -> model, Cmd.none
+        | RunLife -> model, Cmd.none
+                
 
-    let view (model: Model) dispatch =
+    let view (model: Model) dispatch =        
         View.ContentPage(
-          content = View.StackLayout(padding = Thickness 20.0, verticalOptions = LayoutOptions.Center,
-            children = [ 
-                View.Label(text = sprintf "%d" model.Count, horizontalOptions = LayoutOptions.Center, width=200.0, horizontalTextAlignment=TextAlignment.Center)
-                View.Button(text = "Increment", command = (fun () -> dispatch Increment), horizontalOptions = LayoutOptions.Center)
-                View.Button(text = "Decrement", command = (fun () -> dispatch Decrement), horizontalOptions = LayoutOptions.Center)
-                View.Label(text = "Timer", horizontalOptions = LayoutOptions.Center)
-                View.Switch(isToggled = model.TimerOn, toggled = (fun on -> dispatch (TimerToggled on.Value)), horizontalOptions = LayoutOptions.Center)
-                View.Slider(minimumMaximum = (0.0, 10.0), value = double model.Step, valueChanged = (fun args -> dispatch (SetStep (int (args.NewValue + 0.5)))), horizontalOptions = LayoutOptions.FillAndExpand)
-                View.Label(text = sprintf "Step size: %d" model.Step, horizontalOptions = LayoutOptions.Center) 
-                View.Button(text = "Reset", horizontalOptions = LayoutOptions.Center, command = (fun () -> dispatch Reset), commandCanExecute = (model <> initModel))
-            ]))
+            content = View.StackLayout(padding = Thickness 20.0, verticalOptions = LayoutOptions.Center,
+                children =  
+                    [ 
+                    View.Label(text=sprintf "Grid (6x6, auto version 0.0.4):")
+                    View.Grid(
+                        backgroundColor=Color.Black, padding=Thickness 3.0, horizontalOptions=LayoutOptions.Fill,
+                        coldefs=[for i in 1 .. model.columns -> Star], 
+                        rowdefs= [for i in 1 .. model.rows -> Star],
+                        children = [ 
+                            for i in 1 .. model.rows do 
+                                for j in 1 .. model.columns -> 
+                                    let c = Color((1.0/float i), (1.0/float j), (1.0/float (i+j)), 1.0)
+                                    View.BoxView(color = c, horizontalOptions=LayoutOptions.Fill, verticalOptions=LayoutOptions.Fill).Row(i-1).Column(j-1)
+                            ] )
+                    ]
+                )
+          )
 
     // Note, this declaration is needed if you enable LiveUpdate
     let program = Program.mkProgram init update view
