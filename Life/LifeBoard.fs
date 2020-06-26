@@ -12,7 +12,7 @@ type LifeBoard =
     {   
         dimensions: BoardDimensions        
         lifeArray: LifeArray        
-        changeCount: int
+        changeFlag: bool // so that we can stop the timer if there are no changes      
     }
 
 type Cartesian = int * int
@@ -30,13 +30,8 @@ let CartesianToIndex(((x, y) : Cartesian, dimensions: BoardDimensions)) =
     y * (dimensions.rows - 1) + x    
 
 let IndexToCartesian(index: int, dimensions: BoardDimensions) : Cartesian =
-    let r = 
-        match (dimensions.rows < 1) with 
-        | true -> 1
-        | false -> dimensions.rows
-
     let x = index % dimensions.rows
-    let y = (int) index / r
+    let y = (int) index / dimensions.rows
     (x, y)
 
     
@@ -62,7 +57,12 @@ let updateKinCount(lifeBoard: LifeBoard, index, cellType) =
     
     seq {
         for x:int in [-1; 0; 1] do yield index - columns - x//previous row            
-        for x in [-1; 1] do yield index + x //current row
+        for x in [-1; 1] do 
+            let kindex = index + x
+            let kRow = (int) index / rows
+            let iRow = (int) kindex / rows
+            if kRow = iRow then            
+                yield index + x //current row
         for x in [-1; 0; 1] do yield index + columns + x //next row
     }
     |> Seq.filter(fun ndx -> (ndx >= 0) && (ndx < cellCount) )    
@@ -102,7 +102,7 @@ let initialLifeBoard( dimensions: BoardDimensions) =
                 | _ -> CellDesert, 0
             ) randomlist
     let lifeArray = Array.ofList arr
-    let lifeBoard = {lifeArray = lifeArray; dimensions = {rows = dimensions.rows; columns = dimensions.columns}; changeCount = 0}
+    let lifeBoard = {lifeArray = lifeArray; dimensions = {rows = dimensions.rows; columns = dimensions.columns}; changeFlag = true}
 
     lifeArray |> Array.fold(fun index (cellState, _kinCount)->
         (cellState = CellBirth) |> iter  (fun() ->
@@ -130,13 +130,13 @@ let renderBoard(lifeBoard: LifeBoard) =
     // Go to 1 (render)
 let evolve(lifeBoard:LifeBoard) = 
     let changes = updateCellStates(lifeBoard)
-    {lifeBoard with changeCount = (lifeBoard.changeCount + changes) % (lifeBoard.dimensions.rows * lifeBoard.dimensions.columns + 1)} 
+    {lifeBoard with changeFlag = (changes > 0);} 
 
 let f() = 
     let lifeBoard:LifeBoard = initialLifeBoard({rows = 5; columns = 5})
     renderBoard(lifeBoard)
     let c = updateCellStates(lifeBoard)
-    let lifeBoard = {lifeBoard with changeCount = (lifeBoard.changeCount + c) % (lifeBoard.dimensions.rows * lifeBoard.dimensions.columns + 1)}    
+    let lifeBoard = {lifeBoard with changeFlag = (c > 0)}    
     renderBoard(lifeBoard)
     
 

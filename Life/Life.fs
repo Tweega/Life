@@ -56,7 +56,10 @@ module App =
 
     let update msg model =
         match msg with        
-        | RestartBoard -> init ()        
+        | RestartBoard -> 
+            let (newModel, cmd) = init()
+            {newModel with timerOn = model.timerOn}, cmd
+
         | ResetConfig -> model, Cmd.none
         | ToggleCell cell -> model, Cmd.none
         | ToggleMode lifeMode -> 
@@ -78,7 +81,11 @@ module App =
                     | true -> 
                         //update life board - possibly this could be done while the timer was waiting
                         let newBoard = evolve(model.lifeBoard)
-                        newBoard, timerCmd(model.timerInterval)
+                        let cmd = 
+                            match model.lifeBoard.changeFlag with
+                            | true -> timerCmd(model.timerInterval)
+                            | false -> Cmd.none
+                        newBoard, cmd
                     | false -> model.lifeBoard, Cmd.none                
             {model with lifeBoard = lifeBoard; stepCount = model.stepCount + 1}, cmd
          | SetTimerInterval n -> {model with timerInterval = n;}, Cmd.none
@@ -88,9 +95,15 @@ module App =
                     | true -> (false, Cmd.none)
                     | false -> (true, timerCmd(model.timerInterval))
             {model with timerOn = timerSetting}, cmd
+
+
     let view (model: Model) dispatch =        
         let columns = model.lifeBoard.dimensions.columns
         let rows = model.lifeBoard.dimensions.rows
+        let timerText = 
+            match model.timerOn with
+                | true -> "Stop timer"
+                | false -> "Start timer"
 
         View.ContentPage(
             content = View.StackLayout(padding = Thickness 20.0, verticalOptions = LayoutOptions.Center,
@@ -101,13 +114,12 @@ module App =
                         children = [
                             View.Button(text="step", command=(fun() -> dispatch StepLife), horizontalOptions = LayoutOptions.Start)
                             View.Button(text="reset", command=(fun() -> dispatch RestartBoard), horizontalOptions = LayoutOptions.Center)
-                            View.Button(text="reset", command=(fun() -> dispatch ToggleTimer), horizontalOptions = LayoutOptions.Center)
-                            View.Label(text=sprintf "steps: %d" model.stepCount, horizontalOptions = LayoutOptions.End)
+                            View.Button(text=timerText, command=(fun() -> dispatch ToggleTimer), horizontalOptions = LayoutOptions.End)                            
                         ]
                     )
-                    View.Label(text=sprintf "Grid (%d*%d, auto version 0.0.2): %d" columns rows model.tickCount)
+                    View.Label(text=sprintf "Grid (%d*%d, auto version 0.0.2): %d" columns rows model.stepCount)
                     View.Grid(
-                        backgroundColor=Color.Black, padding=Thickness 1.0, horizontalOptions=LayoutOptions.Fill,
+                        backgroundColor=Color.AntiqueWhite, padding=Thickness 1.0, horizontalOptions=LayoutOptions.Fill,
                         coldefs=[for i in 1 .. columns -> Star], 
                         rowdefs= [for i in 1 .. rows -> Star],
                         children =  
