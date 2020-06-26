@@ -6,75 +6,128 @@ open Fabulous
 open Fabulous.XamarinForms
 open Fabulous.XamarinForms.LiveUpdate
 open Xamarin.Forms
+open LifeBoard
 
 module App =
+    type PlayState = 
+        | LifeRunning
+        | LifePaused
+
     type PlayMode =
-        | RunMode
+        | RunMode of PlayState
         | ConfigureMode 
 
+    
     type Model = 
       {
-        rows: int
-        columns: int
+        lifeBoard: LifeBoard
         mode: PlayMode
+        stepCount: int
+        tickCount: int
+        timerOn: bool
+        timerInterval: int
       }
-    type Cell = int * int
     
     type Msg = 
         //configure mode
         | ToggleCell of Cell    
-        | Reset
-        | RunLife
+        | ResetConfig        
+        | SetTimerInterval of int
 
         // play mode
-        | PauseEvolution
-        | CeaseEvolution
-        | StepEvolution 
-        | SetStep
+        | PauseLife
+        | RunLife
+        | StepLife        
         | TimedTick
-        
+        | RestartBoard
+        | ToggleTimer
+
         // both modes
-        | ChangeMode of PlayMode
-    let initModel = { rows = 10; columns = 10; mode = ConfigureMode}
+        | ToggleMode of PlayMode
 
-    let init () = initModel, Cmd.none
+    let initModel() = { lifeBoard = initialLifeBoard({rows = 10; columns = 10}); mode = ConfigureMode; stepCount = 0; tickCount = 0; timerOn = false; timerInterval = 1}
 
-    let timerCmd =
-        async { do! Async.Sleep 200
+    let timerCmd(timerInterval) =
+        async { do! Async.Sleep (timerInterval * 1000)
                 return TimedTick }
         |> Cmd.ofAsyncMsg
 
-    let update msg model =
-        match msg with
-        
-        
-        | Reset -> init ()        
-        | ToggleCell cell -> model, Cmd.none
-        | ChangeMode lifeMode -> model, Cmd.none        
-        | PauseEvolution -> model, Cmd.none
-        | StepEvolution -> model, Cmd.none
-        | CeaseEvolution -> model, Cmd.none
-        | SetStep -> model, Cmd.none
-        | TimedTick -> model, Cmd.none
-        | RunLife -> model, Cmd.none
-                
+    let init () = initModel(), Cmd.none
 
+    let update msg model =
+        match msg with        
+        | RestartBoard -> init ()        
+        | ResetConfig -> model, Cmd.none
+        | ToggleCell cell -> model, Cmd.none
+        | ToggleMode lifeMode -> 
+            let newMode = 
+                match model.mode with
+                | RunMode -> ConfigureMode
+                | ConfigureMode -> RunMode LifePaused
+            {model with mode = newMode}, Cmd.none 
+        | RunLife -> {model with timerOn = true}, timerCmd(model.timerInterval)
+        | PauseLife -> {model with timerOn = false}, Cmd.none
+        | StepLife -> 
+            //update life board
+            let lifeBoard = evolve(model.lifeBoard)                                        
+            {model with lifeBoard = lifeBoard; stepCount = model.stepCount + 1}, Cmd.none
+            
+        | TimedTick -> 
+            let lifeBoard, cmd = 
+                match model.timerOn with 
+                    | true -> 
+                        //update life board - possibly this could be done while the timer was waiting
+                        let newBoard = evolve(model.lifeBoard)
+                        newBoard, timerCmd(model.timerInterval)
+                    | false -> model.lifeBoard, Cmd.none                
+            {model with lifeBoard = lifeBoard; stepCount = model.stepCount + 1}, cmd
+         | SetTimerInterval n -> {model with timerInterval = n;}, Cmd.none
+         | ToggleTimer ->
+            let (timerSetting, cmd) = 
+                match model.timerOn with
+                    | true -> (false, Cmd.none)
+                    | false -> (true, timerCmd(model.timerInterval))
+            {model with timerOn = timerSetting}, cmd
     let view (model: Model) dispatch =        
+        let columns = model.lifeBoard.dimensions.columns
+        let rows = model.lifeBoard.dimensions.rows
+
         View.ContentPage(
             content = View.StackLayout(padding = Thickness 20.0, verticalOptions = LayoutOptions.Center,
                 children =  
                     [ 
-                    View.Label(text=sprintf "Grid (6x6, auto version 0.0.4):")
+                    View.StackLayout(
+                        orientation = StackOrientation.Horizontal, horizontalOptions = LayoutOptions.Fill,
+                        children = [
+                            View.Button(text="step", command=(fun() -> dispatch StepLife), horizontalOptions = LayoutOptions.Start)
+                            View.Button(text="reset", command=(fun() -> dispatch RestartBoard), horizontalOptions = LayoutOptions.Center)
+                            View.Button(text="reset", command=(fun() -> dispatch ToggleTimer), horizontalOptions = LayoutOptions.Center)
+                            View.Label(text=sprintf "steps: %d" model.stepCount, horizontalOptions = LayoutOptions.End)
+                        ]
+                    )
+                    View.Label(text=sprintf "Grid (%d*%d, auto version 0.0.2): %d" columns rows model.tickCount)
                     View.Grid(
-                        backgroundColor=Color.Black, padding=Thickness 3.0, horizontalOptions=LayoutOptions.Fill,
-                        coldefs=[for i in 1 .. model.columns -> Star], 
-                        rowdefs= [for i in 1 .. model.rows -> Star],
-                        children = [ 
-                            for i in 1 .. model.rows do 
-                                for j in 1 .. model.columns -> 
-                                    let c = Color((1.0/float i), (1.0/float j), (1.0/float (i+j)), 1.0)
-                                    View.BoxView(color = c, horizontalOptions=LayoutOptions.Fill, verticalOptions=LayoutOptions.Fill).Row(i-1).Column(j-1)
-                            ] )
+                        backgroundColor=Color.Black, padding=Thickness 1.0, horizontalOptions=LayoutOptions.Fill,
+                        coldefs=[for i in 1 .. columns -> Star], 
+                        rowdefs= [for i in 1 .. rows -> Star],
+                        children =  
+                            //View.BoxView(color = Color.Aqua, horizontalOptions=LayoutOptions.Fill, verticalOptions=LayoutOptions.Fill).Row(1).Column(1)
+                            List.mapi(fun index ((_, cell), _) ->
+                                let colour = 
+                                    match cell with
+                                        | FullCell -> Color.Aqua
+                                        | EmptyCell -> Color.White
+                                let (i, j) = IndexToCartesian(index, model.lifeBoard.dimensions)
+                                View.BoxView(color = colour, horizontalOptions=LayoutOptions.Fill, verticalOptions=LayoutOptions.Fill).Row(j).Column(i)
+                            ) (model.lifeBoard.lifeArray |> List.ofArray)
+                            (*for ((_, cell), _) in model.lifeBoard.lifeArray ->                            
+                                let colour = 
+                                    match cell with
+                                        | FullCell -> Color.Aqua
+                                        | EmptyCell -> Color.White
+                                //let (i, j) = IndexToCartesian(ind)
+                                View.BoxView(color = colour, horizontalOptions=LayoutOptions.Fill, verticalOptions=LayoutOptions.Fill).Row(i-1).Column(j-1)*)
+                             )
                     ]
                 )
           )
