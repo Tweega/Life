@@ -27,7 +27,7 @@
     <RestorePackages>true</RestorePackages>
     <OtherFlags>/warnon:1182</OtherFlags>
     <WarningLevel>4</WarningLevel>
-    <SelectedDevice>HUAWEI HRY-LX1</SelectedDevice>
+    <SelectedDevice>Pixel_2_API_28</SelectedDevice>
     <DefaultDevice>Pixel_2_API_28</DefaultDevice>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
